@@ -213,6 +213,8 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "https://smart-pre-trading.vercel.app",
+        "https://smart-pre.onrender.com",
+        "https://smart-pre-backend.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
