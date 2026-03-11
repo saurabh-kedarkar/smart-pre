@@ -8,7 +8,7 @@
     // ─── API Config ─────────────────────────────────
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     // Change this to your Render backend URL (e.g., 'https://your-app.onrender.com')
-    const API_BASE_URL = isLocal ? '' : 'https://smart-pre-backend.onrender.com';
+    const API_BASE_URL = isLocal ? '' : 'https://smart-pre.onrender.com';
 
     // ─── State ──────────────────────────────────────
    const state = {
