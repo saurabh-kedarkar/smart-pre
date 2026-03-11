@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# Frontend
+node_modules/
+.DS_Store
