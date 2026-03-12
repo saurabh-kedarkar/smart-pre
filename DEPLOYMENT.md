@@ -15,7 +15,7 @@ git push -u origin main
 4. Settings:
    - **Name**: `smart-pre-backend`
    - **Environment**: `Python`
-   - **Build Command**: `pip install -r backend/requirements.txt`
+   - **Build Command**: `python -m pip install --upgrade pip && pip install -r backend/requirements.txt`
    - **Start Command**: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
 5. Click **Deploy**.
 6. **Note your URL:** It will be something like `https://smart-pre-backend.onrender.com`.
