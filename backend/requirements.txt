@@ -12,8 +12,6 @@ ta==0.11.0
 scikit-learn==1.6.1
 
 # ─── ML / Deep Learning ───
-torch==2.5.1
-transformers==4.47.1
 
 # ─── NLP / Sentiment ───
 textblob==0.18.0.post0

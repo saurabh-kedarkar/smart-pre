@@ -140,11 +140,11 @@ class SmartPreWebSocket {
                 break;
             case 'disconnected':
                 dot.classList.add('disconnected');
-                text.textContent = 'Reconnecting...';
+                text.textContent = 'Backend Offline';
                 break;
             case 'error':
                 dot.classList.add('disconnected');
-                text.textContent = 'Error';
+                text.textContent = 'Connection Error';
                 break;
         }
     }

@@ -33,10 +33,10 @@ class DataAgent:
         self._last_update: dict = {}
 
     async def initialize(self) -> None:
-        """Load initial historical data for all symbols."""
+        """Load initial historical data for all symbols in parallel."""
         logger.info("Initializing Data Agent...")
 
-        for symbol in self.symbols:
+        async def init_symbol(symbol):
             try:
                 multi_tf = await self.client.get_multi_timeframe(symbol)
                 self._candles[symbol] = multi_tf
@@ -53,6 +53,9 @@ class DataAgent:
                 logger.info(f"Loaded data for {symbol}")
             except Exception as e:
                 logger.error(f"Failed to load {symbol}: {e}")
+
+        # Run all initializations in parallel
+        await asyncio.gather(*(init_symbol(s) for s in self.symbols))
 
     async def start_streaming(self) -> None:
         """Start WebSocket streams for all symbols."""

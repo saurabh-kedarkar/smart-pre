@@ -168,35 +168,43 @@ async def price_update_loop():
 
 
 # ─── App Lifecycle ───────────────────────────────────
+async def background_startup():
+    """Heavy initialization in background to allow fast server boot."""
+    try:
+        logger.info("Background initialization starting...")
+        # Initialize data agent
+        await data_agent.initialize()
+        # Start data streaming
+        await data_agent.start_streaming()
+        
+        # Start loops
+        global analysis_loop_task
+        analysis_loop_task = asyncio.create_task(analysis_loop())
+        asyncio.create_task(price_update_loop())
+        
+        logger.info("✅ Background initialization complete")
+    except Exception as e:
+        logger.error(f"❌ Background initialization failed: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global analysis_loop_task
     logger.info("🚀 SmartPre AI Agent starting...")
-
-    # Initialize data agent
-    await data_agent.initialize()
     
-    # Start data streaming
-    await data_agent.start_streaming()
-
-    # Start analysis loop
-    analysis_loop_task = asyncio.create_task(analysis_loop())
+    # Start background initialization immediately but don't wait for it
+    asyncio.create_task(background_startup())
     
-    # Start fast price update loop
-    price_update_task = asyncio.create_task(price_update_loop())
-    
-    logger.info("✅ Analysis pipeline and real-time streaming running")
-
+    logger.info("✅ Server process started, background tasks queued")
     yield
-
+    
     # Shutdown
     logger.info("Shutting down SmartPre...")
-    if analysis_loop_task:
-        analysis_loop_task.cancel()
-    if 'price_update_task' in locals():
-        price_update_task.cancel()
-    await data_agent.stop()
-    await sentiment_agent.close()
+    try:
+        if 'analysis_loop_task' in globals() and analysis_loop_task:
+            analysis_loop_task.cancel()
+        await data_agent.stop()
+        await sentiment_agent.close()
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
 
 
 # ─── FastAPI App ─────────────────────────────────────
@@ -209,13 +217,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://smart-pre-trading.vercel.app",
-        "https://smart-pre.onrender.com",
-        "https://smart-pre-backend.onrender.com",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
