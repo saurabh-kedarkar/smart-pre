@@ -6,10 +6,10 @@ httpx==0.28.1
 python-dotenv==1.0.1
 
 # ─── Data & Analysis ───
-numpy==2.2.1
-pandas==2.2.3
+numpy==1.26.4
+pandas==2.2.2
 ta==0.11.0
-scikit-learn==1.6.1
+scikit-learn==1.5.0
 
 # ─── ML / Deep Learning ───
 

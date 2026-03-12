@@ -171,7 +171,9 @@ async def price_update_loop():
 async def background_startup():
     """Heavy initialization in background to allow fast server boot."""
     try:
-        logger.info("Background initialization starting...")
+        logger.info("Background initialization starting in 5s...")
+        await asyncio.sleep(5)  # Let server bind first
+        
         # Initialize data agent
         await data_agent.initialize()
         # Start data streaming
@@ -224,7 +226,10 @@ app.add_middleware(
 )
 
 # Serve frontend
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+# Serve frontend assets
+app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
+app.mount("/js", StaticFiles(directory="../frontend/js"), name="js")
+app.mount("/css", StaticFiles(directory="../frontend/css"), name="css")
 
 
 # ─── REST Endpoints ──────────────────────────────────
