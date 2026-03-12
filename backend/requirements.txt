@@ -1,23 +1,19 @@
 # ─── Core ───
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
+uvicorn==0.34.0
 websockets==14.1
 httpx==0.28.1
 python-dotenv==1.0.1
 
 # ─── Data & Analysis ───
-numpy==1.26.4
-pandas==2.1.4
+numpy>=1.26.0,<2.0.0
+pandas>=2.1.0,<2.2.0
 ta==0.11.0
-scikit-learn==1.3.2
-
-# ─── ML / Deep Learning ───
 
 # ─── NLP / Sentiment ───
-textblob==0.18.0.post0
 vaderSentiment==3.3.2
 
 # ─── Utilities ───
 aiohttp==3.11.11
 python-dateutil==2.9.0
-pydantic==2.10.4
+pydantic>=2.0.0
