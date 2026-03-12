@@ -6,9 +6,13 @@
    'use strict';
 
     // ─── API Config ─────────────────────────────────
+    // --- DEPLOYMENT CONFIG ---
+    const productionBackend = 'smart-pre-backend.onrender.com';
+    const isProdBackend = window.location.hostname === productionBackend;
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    // Change this to your Render backend URL (e.g., 'https://your-app.onrender.com')
-    const API_BASE_URL = isLocal ? '' : 'https://smart-pre-backend.onrender.com';
+    
+    // Use relative path if running on the backend host or locally
+    const API_BASE_URL = (isLocal || isProdBackend) ? '' : `https://${productionBackend}`;
 
     // ─── State ──────────────────────────────────────
    const state = {

@@ -19,9 +19,10 @@ class SmartPreWebSocket {
         // --- DEPLOYMENT CONFIG ---
         // Change this URL to your Render backend URL (e.g., 'your-app.onrender.com')
         const productionBackend = 'smart-pre-backend.onrender.com'; 
-        
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const host = isLocal ? window.location.host : productionBackend;
+        const isProdBackend = window.location.hostname === productionBackend;
+        
+        const host = (isLocal || isProdBackend) ? window.location.host : productionBackend;
         const wsUrl = `${protocol}//${host}/ws`;
 
         try {

@@ -56,6 +56,54 @@ class DataAgent:
 
         # Run all initializations in parallel
         await asyncio.gather(*(init_symbol(s) for s in self.symbols))
+        
+        # Check if any data was loaded
+        loaded_count = sum(1 for s in self.symbols if s in self._prices)
+        if loaded_count == 0:
+            logger.warning("⚠️ No data loaded from Binance. Activating fallback/simulated data...")
+            self._set_fallback_data()
+        else:
+            logger.info(f"✅ Data Agent initialized with {loaded_count} symbols")
+
+    def _set_fallback_data(self) -> None:
+        """Populate with realistic simulated data if Binance is unreachable."""
+        base_prices = {
+            "BTCUSDT": 65000.0, "ETHUSDT": 3500.0, "SOLUSDT": 145.0,
+            "BNBUSDT": 580.0, "XRPUSDT": 0.62, "ADAUSDT": 0.45,
+            "AVAXUSDT": 35.0, "DOTUSDT": 7.0, "LINKUSDT": 18.0
+        }
+        
+        for symbol in self.symbols:
+            price = base_prices.get(symbol, 100.0)
+            # Add some randomness
+            price *= (1 + (np.random.random() - 0.5) * 0.01)
+            
+            self._prices[symbol] = price
+            self._tickers[symbol] = {
+                "lastPrice": str(price),
+                "highPrice": str(price * 1.02),
+                "lowPrice": str(price * 0.98),
+                "volume": "1000",
+                "quoteVolume": str(price * 1000),
+            }
+            self._last_update[symbol] = datetime.utcnow().isoformat()
+            
+            # Create dummy candles if missing
+            if symbol not in self._candles:
+                from utils.binance_client import BinanceClient
+                # We can't really call the client if it's failing, so generate manual DF
+                dates = pd.date_range(end=datetime.utcnow(), periods=200, freq='1min')
+                df = pd.DataFrame(index=dates)
+                df.index.name = "open_time"
+                df['close'] = price * (1 + np.random.randn(200).cumsum() * 0.001)
+                df['open'] = df['close'].shift(1).fillna(df['close'] * 0.999)
+                df['high'] = df[['open', 'close']].max(axis=1) * 1.001
+                df['low'] = df[['open', 'close']].min(axis=1) * 0.999
+                df['volume'] = np.random.random(200) * 10 + 5
+                df['quote_vol'] = df['volume'] * df['close']
+                df['trades'] = 100
+                
+                self._candles[symbol] = {"1m": df, "5m": df, "15m": df, "1h": df}
 
     async def start_streaming(self) -> None:
         """Start WebSocket streams for all symbols."""
@@ -115,16 +163,18 @@ class DataAgent:
         """Refresh all data for a symbol (REST fallback)."""
         try:
             multi_tf = await self.client.get_multi_timeframe(symbol)
-            self._candles[symbol] = multi_tf
+            if multi_tf and any(v is not None for v in multi_tf.values()):
+                self._candles[symbol] = multi_tf
 
             ticker = await self.client.get_ticker_24h(symbol)
-            self._tickers[symbol] = ticker
+            if ticker and ticker.get("lastPrice"):
+                self._tickers[symbol] = ticker
+                self._prices[symbol] = float(ticker.get("lastPrice", 0))
+                self._last_update[symbol] = datetime.utcnow().isoformat()
 
             order_book = await self.client.get_order_book(symbol)
-            self._order_books[symbol] = order_book
-
-            self._prices[symbol] = float(ticker.get("lastPrice", 0))
-            self._last_update[symbol] = datetime.utcnow().isoformat()
+            if order_book and order_book.get("bids"):
+                self._order_books[symbol] = order_book
         except Exception as e:
             logger.error(f"Refresh failed for {symbol}: {e}")
 
