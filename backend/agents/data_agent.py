@@ -31,6 +31,7 @@ class DataAgent:
         self._order_books: dict = {}   # symbol -> order book
         self._prices: dict = {}        # symbol -> current price
         self._last_update: dict = {}
+        self.use_simulation = False
 
     async def initialize(self) -> None:
         """Load initial historical data for all symbols in parallel."""
@@ -55,7 +56,20 @@ class DataAgent:
                 logger.error(f"Failed to load {symbol}: {e}")
 
         # Run all initializations in parallel
-        await asyncio.gather(*(init_symbol(s) for s in self.symbols))
+        try:
+            await asyncio.gather(*(init_symbol(s) for s in self.symbols))
+        except Exception as e:
+            if "451" in str(e):
+                self.use_simulation = True
+        
+        # Check if any data was loaded
+        loaded_count = sum(1 for s in self.symbols if s in self._prices)
+        if loaded_count == 0 or self.use_simulation:
+            logger.warning("⚠️ Binance blocked or unreachable. Activating simulation mode...")
+            self.use_simulation = True
+            self._set_fallback_data()
+        else:
+            logger.info(f"✅ Data Agent initialized with {loaded_count} symbols")
         
         # Check if any data was loaded
         loaded_count = sum(1 for s in self.symbols if s in self._prices)
@@ -161,6 +175,10 @@ class DataAgent:
 
     async def refresh_data(self, symbol: str) -> None:
         """Refresh all data for a symbol (REST fallback)."""
+        if self.use_simulation:
+            self._simulate_runtime_update(symbol)
+            return
+
         try:
             multi_tf = await self.client.get_multi_timeframe(symbol)
             if multi_tf and any(v is not None for v in multi_tf.values()):
@@ -176,7 +194,34 @@ class DataAgent:
             if order_book and order_book.get("bids"):
                 self._order_books[symbol] = order_book
         except Exception as e:
-            logger.error(f"Refresh failed for {symbol}: {e}")
+            if "451" in str(e):
+                logger.warning(f"Detection of 451 block for {symbol}. Switching to simulation.")
+                self.use_simulation = True
+                self._simulate_runtime_update(symbol)
+            else:
+                logger.error(f"Refresh failed for {symbol}: {e}")
+
+    def _simulate_runtime_update(self, symbol: str) -> None:
+        """Create a small price move for simulation."""
+        current_price = self._prices.get(symbol, 65000.0 if "BTC" in symbol else 3000.0)
+        # Random move +/- 0.05%
+        new_price = current_price * (1 + (np.random.random() - 0.5) * 0.001)
+        self._prices[symbol] = new_price
+        
+        if symbol in self._tickers:
+            self._tickers[symbol]["lastPrice"] = str(new_price)
+            self._tickers[symbol]["highPrice"] = str(max(float(self._tickers[symbol]["highPrice"]), new_price))
+            self._tickers[symbol]["lowPrice"] = str(min(float(self._tickers[symbol]["lowPrice"]), new_price))
+        
+        self._last_update[symbol] = datetime.utcnow().isoformat()
+
+        # Update last candle close
+        if symbol in self._candles and "1m" in self._candles[symbol]:
+            df = self._candles[symbol]["1m"]
+            if not df.empty:
+                df.iloc[-1, df.columns.get_loc('close')] = new_price
+                df.iloc[-1, df.columns.get_loc('high')] = max(df.iloc[-1]['high'], new_price)
+                df.iloc[-1, df.columns.get_loc('low')] = min(df.iloc[-1]['low'], new_price)
 
     # ── Accessors ──────────────────────────────────────
     def get_candles(self, symbol: str,
