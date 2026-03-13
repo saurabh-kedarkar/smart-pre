@@ -62,19 +62,11 @@ class DataAgent:
             if "451" in str(e):
                 self.use_simulation = True
         
-        # Check if any data was loaded
+        # Check if any data was loaded or if explicitly blocked
         loaded_count = sum(1 for s in self.symbols if s in self._prices)
         if loaded_count == 0 or self.use_simulation:
             logger.warning("⚠️ Binance blocked or unreachable. Activating simulation mode...")
             self.use_simulation = True
-            self._set_fallback_data()
-        else:
-            logger.info(f"✅ Data Agent initialized with {loaded_count} symbols")
-        
-        # Check if any data was loaded
-        loaded_count = sum(1 for s in self.symbols if s in self._prices)
-        if loaded_count == 0:
-            logger.warning("⚠️ No data loaded from Binance. Activating fallback/simulated data...")
             self._set_fallback_data()
         else:
             logger.info(f"✅ Data Agent initialized with {loaded_count} symbols")
@@ -218,10 +210,16 @@ class DataAgent:
         # Update last candle close
         if symbol in self._candles and "1m" in self._candles[symbol]:
             df = self._candles[symbol]["1m"]
-            if not df.empty:
+            if df is not None and not df.empty:
                 df.iloc[-1, df.columns.get_loc('close')] = new_price
                 df.iloc[-1, df.columns.get_loc('high')] = max(df.iloc[-1]['high'], new_price)
                 df.iloc[-1, df.columns.get_loc('low')] = min(df.iloc[-1]['low'], new_price)
+
+    def trigger_simulation_update(self) -> None:
+        """Trigger update for all symbols if in simulation mode."""
+        if self.use_simulation:
+            for s in self.symbols:
+                self._simulate_runtime_update(s)
 
     # ── Accessors ──────────────────────────────────────
     def get_candles(self, symbol: str,

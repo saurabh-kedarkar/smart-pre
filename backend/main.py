@@ -139,6 +139,9 @@ async def price_update_loop():
     global ws_clients
     while True:
         try:
+            # If in simulation mode, update prices every second for high frequency feel
+            data_agent.trigger_simulation_update()
+            
             if ws_clients:
                 prices = data_agent.get_all_prices()
                 payload = json.dumps({
