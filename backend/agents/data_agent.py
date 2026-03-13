@@ -99,10 +99,14 @@ class DataAgent:
             self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.002
             if symbol not in self._candles:
                 # We generate manual DF since Binance is blocked
+                # Use a moving window for simulation
                 dates = pd.date_range(end=datetime.utcnow(), periods=200, freq='1min')
                 df = pd.DataFrame(index=dates)
                 df.index.name = "open_time"
-                df['close'] = price * (1 + np.random.randn(200).cumsum() * 0.001)
+                
+                # Create a more structured random walk with momentum
+                walk = np.random.randn(200).cumsum() * 0.001
+                df['close'] = price * (1 + walk)
                 df['open'] = df['close'].shift(1).fillna(df['close'] * 0.999)
                 df['high'] = df[['open', 'close']].max(axis=1) * 1.001
                 df['low'] = df[['open', 'close']].min(axis=1) * 0.999
@@ -203,8 +207,9 @@ class DataAgent:
         current_price = self._prices.get(symbol, 65000.0 if "BTC" in symbol else 3000.0)
         
         # Every 50 calls, maybe change the trend bias
-        if np.random.random() < 0.02:
-            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.003
+        if np.random.random() < 0.05:
+            # Stronger trend bias to force technical signals (RSI/MACD crossovers)
+            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.008
             
         bias = self._simulation_trend.get(symbol, 0)
         # Random move +/- 0.05% + trend bias
@@ -220,13 +225,23 @@ class DataAgent:
         
         self._last_update[symbol] = datetime.utcnow().isoformat()
 
-        # Update last candle close
+        # Update candles (and periodically add new ones to simulate time passing)
         if symbol in self._candles and "1m" in self._candles[symbol]:
             df = self._candles[symbol]["1m"]
             if df is not None and not df.empty:
+                # Update current candle
                 df.iloc[-1, df.columns.get_loc('close')] = new_price
                 df.iloc[-1, df.columns.get_loc('high')] = max(df.iloc[-1]['high'], new_price)
                 df.iloc[-1, df.columns.get_loc('low')] = min(df.iloc[-1]['low'], new_price)
+                
+                # Periodically (roughly every 60 "fast" updates) add a new candle
+                if np.random.random() < 0.02:
+                    new_idx = df.index[-1] + pd.Timedelta(minutes=1)
+                    new_row = df.iloc[-1].copy()
+                    new_row.name = new_idx
+                    new_row['open'] = new_price
+                    # Shift the series
+                    self._candles[symbol]["1m"] = pd.concat([df, pd.DataFrame([new_row])]).tail(200)
 
     def trigger_simulation_update(self) -> None:
         """Trigger update for all symbols if in simulation mode."""
