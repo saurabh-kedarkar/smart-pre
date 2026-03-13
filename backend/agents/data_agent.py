@@ -54,7 +54,14 @@ class DataAgent:
 
                 logger.info(f"Loaded data for {symbol}")
             except Exception as e:
-                logger.error(f"Failed to load {symbol}: {e}")
+                # If Binance blocks, attempt CoinCap immediately for price
+                if "451" in str(e):
+                    price = await self.client.get_coincap_price(symbol)
+                    if price:
+                        self._prices[symbol] = price
+                        self._last_update[symbol] = datetime.utcnow().isoformat()
+                        logger.info(f"Loaded fallback price for {symbol} via CoinCap")
+                logger.error(f"Failed to load {symbol} from Binance: {e}")
 
         # Run all initializations in parallel
         try:
@@ -95,11 +102,12 @@ class DataAgent:
             }
             self._last_update[symbol] = datetime.utcnow().isoformat()
             
-            # Create dummy candles if missing
+            # Create dummy candles if missing OR empty
             self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.002
-            if symbol not in self._candles:
+            is_empty = symbol not in self._candles or not self._candles[symbol].get("1m") is not None
+            
+            if is_empty:
                 # We generate manual DF since Binance is blocked
-                # Use a moving window for simulation
                 dates = pd.date_range(end=datetime.utcnow(), periods=200, freq='1min')
                 df = pd.DataFrame(index=dates)
                 df.index.name = "open_time"
@@ -196,8 +204,13 @@ class DataAgent:
                 self._order_books[symbol] = order_book
         except Exception as e:
             if "451" in str(e):
-                logger.warning(f"Detection of 451 block for {symbol}. Switching to simulation.")
-                self.use_simulation = True
+                logger.warning(f"Detection of 451 block for {symbol}. Trying CoinCap fallback...")
+                price = await self.client.get_coincap_price(symbol)
+                if price:
+                    self._prices[symbol] = price
+                    self._last_update[symbol] = datetime.utcnow().isoformat()
+                else:
+                    self.use_simulation = True
                 self._simulate_runtime_update(symbol)
             else:
                 logger.error(f"Refresh failed for {symbol}: {e}")

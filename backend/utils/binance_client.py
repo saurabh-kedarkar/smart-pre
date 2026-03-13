@@ -10,6 +10,13 @@ from typing import Optional, Union
 
 
 BINANCE_BASE = "https://api.binance.com"
+COINCAP_BASE = "https://api.coincap.io/v2"
+
+SYMBOL_MAP = {
+    "BTCUSDT": "bitcoin", "ETHUSDT": "ethereum", "SOLUSDT": "solana",
+    "BNBUSDT": "binance-coin", "XRPUSDT": "ripple", "ADAUSDT": "cardano",
+    "AVAXUSDT": "avalanche", "DOTUSDT": "polkadot", "LINKUSDT": "chainlink"
+}
 
 
 class BinanceClient:
@@ -98,6 +105,22 @@ class BinanceClient:
         """Get all current prices."""
         data = await self._get("/api/v3/ticker/price")
         return {item["symbol"]: float(item["price"]) for item in data}
+
+    # ── Fallback provider (CoinCap) ──────────────────────────
+    async def get_coincap_price(self, symbol: str) -> Optional[float]:
+        """Fetch price from CoinCap as fallback for Binance 451."""
+        try:
+            asset_id = SYMBOL_MAP.get(symbol)
+            if not asset_id: return None
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(f"{COINCAP_BASE}/assets/{asset_id}")
+                if r.status_code == 200:
+                    data = r.json()
+                    return float(data["data"]["priceUsd"])
+        except Exception:
+            pass
+        return None
 
     # ── Multi-timeframe fetch ───────────────────────────────
     async def get_multi_timeframe(self, symbol: str,
