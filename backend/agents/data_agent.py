@@ -29,6 +29,7 @@ class DataAgent:
         self._candles: dict = {}       # symbol -> {timeframe -> DataFrame}
         self._tickers: dict = {}       # symbol -> latest ticker
         self._order_books: dict = {}   # symbol -> order book
+        self._prices: dict = {}        # symbol -> current price
         self._last_update: dict = {}
         self.use_simulation = False
         self._simulation_trend: dict = {} # symbol -> float (current trend bias)
@@ -113,6 +114,10 @@ class DataAgent:
 
     async def start_streaming(self) -> None:
         """Start WebSocket streams for all symbols."""
+        if self.use_simulation:
+            logger.info("Skipping real-time streams (simulation mode active)")
+            return
+
         for symbol in self.symbols:
             await self.ws_manager.subscribe_ticker(
                 symbol, lambda data, s=symbol: self._on_ticker(s, data)
