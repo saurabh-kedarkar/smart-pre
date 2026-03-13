@@ -101,13 +101,19 @@ async def analysis_loop():
     while True:
         try:
             results = {}
-            for symbol in DEFAULT_SYMBOLS:
+            async def analyze_and_store(symbol):
                 try:
                     result = await run_analysis_pipeline(symbol)
-                    results[symbol] = result
+                    return symbol, result
                 except Exception as e:
                     logger.error(f"Pipeline error for {symbol}: {e}")
-                    results[symbol] = {"symbol": symbol, "error": str(e)}
+                    return symbol, {"symbol": symbol, "error": str(e)}
+
+            # Run all symbols in parallel for faster updates
+            analysis_tasks = [analyze_and_store(s) for s in DEFAULT_SYMBOLS]
+            pipeline_results = await asyncio.gather(*analysis_tasks)
+            
+            results = {symbol: res for symbol, res in pipeline_results}
 
             # Broadcast to all WebSocket clients
             if ws_clients:
@@ -174,18 +180,19 @@ async def price_update_loop():
 async def background_startup():
     """Heavy initialization in background to allow fast server boot."""
     try:
-        logger.info("Background initialization starting in 5s...")
-        await asyncio.sleep(5)  # Let server bind first
+        logger.info("Background initialization starting in 2s...")
+        await asyncio.sleep(2)  # Let server bind first
         
         # Initialize data agent
         await data_agent.initialize()
-        # Start data streaming
-        await data_agent.start_streaming()
         
-        # Start loops
+        # Start loops IMMEDIATELY after data is ready
         global analysis_loop_task
         analysis_loop_task = asyncio.create_task(analysis_loop())
         asyncio.create_task(price_update_loop())
+        
+        # Start data streaming (background)
+        await data_agent.start_streaming()
         
         logger.info("✅ Background initialization complete")
     except Exception as e:

@@ -29,9 +29,9 @@ class DataAgent:
         self._candles: dict = {}       # symbol -> {timeframe -> DataFrame}
         self._tickers: dict = {}       # symbol -> latest ticker
         self._order_books: dict = {}   # symbol -> order book
-        self._prices: dict = {}        # symbol -> current price
         self._last_update: dict = {}
         self.use_simulation = False
+        self._simulation_trend: dict = {} # symbol -> float (current trend bias)
 
     async def initialize(self) -> None:
         """Load initial historical data for all symbols in parallel."""
@@ -95,9 +95,9 @@ class DataAgent:
             self._last_update[symbol] = datetime.utcnow().isoformat()
             
             # Create dummy candles if missing
+            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.002
             if symbol not in self._candles:
-                from utils.binance_client import BinanceClient
-                # We can't really call the client if it's failing, so generate manual DF
+                # We generate manual DF since Binance is blocked
                 dates = pd.date_range(end=datetime.utcnow(), periods=200, freq='1min')
                 df = pd.DataFrame(index=dates)
                 df.index.name = "open_time"
@@ -196,8 +196,16 @@ class DataAgent:
     def _simulate_runtime_update(self, symbol: str) -> None:
         """Create a small price move for simulation."""
         current_price = self._prices.get(symbol, 65000.0 if "BTC" in symbol else 3000.0)
-        # Random move +/- 0.05%
-        new_price = current_price * (1 + (np.random.random() - 0.5) * 0.001)
+        
+        # Every 50 calls, maybe change the trend bias
+        if np.random.random() < 0.02:
+            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.003
+            
+        bias = self._simulation_trend.get(symbol, 0)
+        # Random move +/- 0.05% + trend bias
+        noise = (np.random.random() - 0.5) * 0.001
+        new_price = current_price * (1 + noise + bias)
+        
         self._prices[symbol] = new_price
         
         if symbol in self._tickers:
