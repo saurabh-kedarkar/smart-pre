@@ -82,17 +82,21 @@ class DataAgent:
     def _set_fallback_data(self) -> None:
         """Populate with realistic simulated data if Binance is unreachable."""
         base_prices = {
-            "BTCUSDT": 65000.0, "ETHUSDT": 3500.0, "SOLUSDT": 145.0,
-            "BNBUSDT": 580.0, "XRPUSDT": 0.62, "ADAUSDT": 0.45,
-            "AVAXUSDT": 35.0, "DOTUSDT": 7.0, "LINKUSDT": 18.0
+            "BTCUSDT": 70300.0, "ETHUSDT": 2100.0, "SOLUSDT": 90.0,
+            "BNBUSDT": 660.0, "XRPUSDT": 1.41, "ADAUSDT": 0.26,
+            "AVAXUSDT": 10.0, "DOTUSDT": 1.50, "LINKUSDT": 9.20
         }
         
         for symbol in self.symbols:
-            price = base_prices.get(symbol, 100.0)
-            # Add some randomness
-            price *= (1 + (np.random.random() - 0.5) * 0.01)
-            
-            self._prices[symbol] = price
+            # ONLY use base_prices if we don't already have a better price (e.g. from CoinCap)
+            if symbol not in self._prices or self._prices[symbol] <= 0:
+                price = base_prices.get(symbol, 100.0)
+                # Add some randomness
+                price *= (1 + (np.random.random() - 0.5) * 0.005)
+                self._prices[symbol] = price
+            else:
+                price = self._prices[symbol]
+                
             self._tickers[symbol] = {
                 "lastPrice": str(price),
                 "highPrice": str(price * 1.02),
