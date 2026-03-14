@@ -31,14 +31,12 @@ class DataAgent:
         self._order_books: dict = {}   # symbol -> order book
         self._prices: dict = {}        # symbol -> current price
         self._last_update: dict = {}
-        self.use_simulation = False
-        self._simulation_trend: dict = {} # symbol -> float (current trend bias)
 
     async def initialize(self) -> None:
-        """Load initial historical data for all symbols in parallel."""
+        """Load initial historical data for all symbols."""
         logger.info("Initializing Data Agent...")
 
-        async def init_symbol(symbol):
+        for symbol in self.symbols:
             try:
                 multi_tf = await self.client.get_multi_timeframe(symbol)
                 self._candles[symbol] = multi_tf
@@ -54,86 +52,10 @@ class DataAgent:
 
                 logger.info(f"Loaded data for {symbol}")
             except Exception as e:
-                # If Binance blocks, attempt CoinCap immediately for price
-                if "451" in str(e):
-                    price = await self.client.get_coincap_price(symbol)
-                    if price:
-                        self._prices[symbol] = price
-                        self._last_update[symbol] = datetime.utcnow().isoformat()
-                        logger.info(f"Loaded fallback price for {symbol} via CoinCap")
-                logger.error(f"Failed to load {symbol} from Binance: {e}")
-
-        # Run all initializations in parallel
-        try:
-            await asyncio.gather(*(init_symbol(s) for s in self.symbols))
-        except Exception as e:
-            if "451" in str(e):
-                self.use_simulation = True
-        
-        # Check if any data was loaded or if explicitly blocked
-        loaded_count = sum(1 for s in self.symbols if s in self._prices)
-        if loaded_count == 0 or self.use_simulation:
-            logger.warning("⚠️ Binance blocked or unreachable. Activating simulation mode...")
-            self.use_simulation = True
-            self._set_fallback_data()
-        else:
-            logger.info(f"✅ Data Agent initialized with {loaded_count} symbols")
-
-    def _set_fallback_data(self) -> None:
-        """Populate with realistic simulated data if Binance is unreachable."""
-        base_prices = {
-            "BTCUSDT": 70300.0, "ETHUSDT": 2100.0, "SOLUSDT": 90.0,
-            "BNBUSDT": 660.0, "XRPUSDT": 1.41, "ADAUSDT": 0.26,
-            "AVAXUSDT": 10.0, "DOTUSDT": 1.50, "LINKUSDT": 9.20
-        }
-        
-        for symbol in self.symbols:
-            # ONLY use base_prices if we don't already have a better price (e.g. from CoinCap)
-            if symbol not in self._prices or self._prices[symbol] <= 0:
-                price = base_prices.get(symbol, 100.0)
-                # Add some randomness
-                price *= (1 + (np.random.random() - 0.5) * 0.005)
-                self._prices[symbol] = price
-            else:
-                price = self._prices[symbol]
-                
-            self._tickers[symbol] = {
-                "lastPrice": str(price),
-                "highPrice": str(price * 1.02),
-                "lowPrice": str(price * 0.98),
-                "volume": "1000",
-                "quoteVolume": str(price * 1000),
-            }
-            self._last_update[symbol] = datetime.utcnow().isoformat()
-            
-            # Create dummy candles if missing OR empty
-            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.002
-            is_empty = symbol not in self._candles or not self._candles[symbol].get("1m") is not None
-            
-            if is_empty:
-                # We generate manual DF since Binance is blocked
-                dates = pd.date_range(end=datetime.utcnow(), periods=200, freq='1min')
-                df = pd.DataFrame(index=dates)
-                df.index.name = "open_time"
-                
-                # Create a more structured random walk with momentum
-                walk = np.random.randn(200).cumsum() * 0.001
-                df['close'] = price * (1 + walk)
-                df['open'] = df['close'].shift(1).fillna(df['close'] * 0.999)
-                df['high'] = df[['open', 'close']].max(axis=1) * 1.001
-                df['low'] = df[['open', 'close']].min(axis=1) * 0.999
-                df['volume'] = np.random.random(200) * 10 + 5
-                df['quote_vol'] = df['volume'] * df['close']
-                df['trades'] = 100
-                
-                self._candles[symbol] = {"1m": df, "5m": df, "15m": df, "1h": df}
+                logger.error(f"Failed to load {symbol}: {e}")
 
     async def start_streaming(self) -> None:
         """Start WebSocket streams for all symbols."""
-        if self.use_simulation:
-            logger.info("Skipping real-time streams (simulation mode active)")
-            return
-
         for symbol in self.symbols:
             await self.ws_manager.subscribe_ticker(
                 symbol, lambda data, s=symbol: self._on_ticker(s, data)
@@ -188,83 +110,20 @@ class DataAgent:
 
     async def refresh_data(self, symbol: str) -> None:
         """Refresh all data for a symbol (REST fallback)."""
-        if self.use_simulation:
-            self._simulate_runtime_update(symbol)
-            return
-
         try:
             multi_tf = await self.client.get_multi_timeframe(symbol)
-            if multi_tf and any(v is not None for v in multi_tf.values()):
-                self._candles[symbol] = multi_tf
+            self._candles[symbol] = multi_tf
 
             ticker = await self.client.get_ticker_24h(symbol)
-            if ticker and ticker.get("lastPrice"):
-                self._tickers[symbol] = ticker
-                self._prices[symbol] = float(ticker.get("lastPrice", 0))
-                self._last_update[symbol] = datetime.utcnow().isoformat()
+            self._tickers[symbol] = ticker
 
             order_book = await self.client.get_order_book(symbol)
-            if order_book and order_book.get("bids"):
-                self._order_books[symbol] = order_book
+            self._order_books[symbol] = order_book
+
+            self._prices[symbol] = float(ticker.get("lastPrice", 0))
+            self._last_update[symbol] = datetime.utcnow().isoformat()
         except Exception as e:
-            if "451" in str(e):
-                logger.warning(f"Detection of 451 block for {symbol}. Trying CoinCap fallback...")
-                price = await self.client.get_coincap_price(symbol)
-                if price:
-                    self._prices[symbol] = price
-                    self._last_update[symbol] = datetime.utcnow().isoformat()
-                else:
-                    self.use_simulation = True
-                self._simulate_runtime_update(symbol)
-            else:
-                logger.error(f"Refresh failed for {symbol}: {e}")
-
-    def _simulate_runtime_update(self, symbol: str) -> None:
-        """Create a small price move for simulation."""
-        current_price = self._prices.get(symbol, 65000.0 if "BTC" in symbol else 3000.0)
-        
-        # Every 50 calls, maybe change the trend bias
-        if np.random.random() < 0.05:
-            # Stronger trend bias to force technical signals (RSI/MACD crossovers)
-            self._simulation_trend[symbol] = (np.random.random() - 0.5) * 0.008
-            
-        bias = self._simulation_trend.get(symbol, 0)
-        # Random move +/- 0.05% + trend bias
-        noise = (np.random.random() - 0.5) * 0.001
-        new_price = current_price * (1 + noise + bias)
-        
-        self._prices[symbol] = new_price
-        
-        if symbol in self._tickers:
-            self._tickers[symbol]["lastPrice"] = str(new_price)
-            self._tickers[symbol]["highPrice"] = str(max(float(self._tickers[symbol]["highPrice"]), new_price))
-            self._tickers[symbol]["lowPrice"] = str(min(float(self._tickers[symbol]["lowPrice"]), new_price))
-        
-        self._last_update[symbol] = datetime.utcnow().isoformat()
-
-        # Update candles (and periodically add new ones to simulate time passing)
-        if symbol in self._candles and "1m" in self._candles[symbol]:
-            df = self._candles[symbol]["1m"]
-            if df is not None and not df.empty:
-                # Update current candle
-                df.iloc[-1, df.columns.get_loc('close')] = new_price
-                df.iloc[-1, df.columns.get_loc('high')] = max(df.iloc[-1]['high'], new_price)
-                df.iloc[-1, df.columns.get_loc('low')] = min(df.iloc[-1]['low'], new_price)
-                
-                # Periodically (roughly every 60 "fast" updates) add a new candle
-                if np.random.random() < 0.02:
-                    new_idx = df.index[-1] + pd.Timedelta(minutes=1)
-                    new_row = df.iloc[-1].copy()
-                    new_row.name = new_idx
-                    new_row['open'] = new_price
-                    # Shift the series
-                    self._candles[symbol]["1m"] = pd.concat([df, pd.DataFrame([new_row])]).tail(200)
-
-    def trigger_simulation_update(self) -> None:
-        """Trigger update for all symbols if in simulation mode."""
-        if self.use_simulation:
-            for s in self.symbols:
-                self._simulate_runtime_update(s)
+            logger.error(f"Refresh failed for {symbol}: {e}")
 
     # ── Accessors ──────────────────────────────────────
     def get_candles(self, symbol: str,

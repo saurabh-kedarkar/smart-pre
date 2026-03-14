@@ -5,16 +5,7 @@
 (function () {
    'use strict';
 
-    // ─── API Config ─────────────────────────────────
-    // --- DEPLOYMENT CONFIG ---
-    const productionBackend = 'smart-pre-backend.onrender.com';
-    const isProdBackend = window.location.hostname === productionBackend;
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // Use relative path if running on the backend host or locally
-    const API_BASE_URL = (isLocal || isProdBackend) ? '' : `https://${productionBackend}`;
-
-    // ─── State ──────────────────────────────────────
+   // ─── State ──────────────────────────────────────
    const state = {
       activeSymbol: 'BTCUSDT',
       symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'],
@@ -189,7 +180,7 @@
    async function fetchInitialData() {
       try {
          // Fetch prices
-         const priceResp = await fetch(`${API_BASE_URL}/api/prices`);
+         const priceResp = await fetch('/api/prices');
          if (priceResp.ok) {
             state.prices = await priceResp.json();
             updatePriceDisplay(state.activeSymbol);
@@ -200,7 +191,7 @@
 
       try {
          // Fetch all decisions
-         const decResp = await fetch(`${API_BASE_URL}/api/decisions`);
+         const decResp = await fetch('/api/decisions');
          if (decResp.ok) {
             const decisions = await decResp.json();
             if (Object.keys(decisions).length > 0) {
@@ -218,7 +209,7 @@
 
    async function loadChartData(symbol) {
       try {
-         const resp = await fetch(`${API_BASE_URL}/api/market/${symbol}`);
+         const resp = await fetch(`/api/market/${symbol}`);
          if (!resp.ok) return;
          const data = await resp.json();
          if (data.price) {

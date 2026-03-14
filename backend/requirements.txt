@@ -1,19 +1,25 @@
 # ─── Core ───
-fastapi==0.115.6
-uvicorn==0.34.0
-websockets==14.1
-httpx==0.28.1
-python-dotenv==1.0.1
+fastapi
+uvicorn[standard]
+websockets
+httpx
+python-dotenv
 
 # ─── Data & Analysis ───
-numpy>=1.26.0,<2.0.0
-pandas>=2.1.0,<2.2.0
-ta==0.11.0
+numpy
+pandas
+ta
+scikit-learn
+
+# ─── ML / Deep Learning ───
+torch
+transformers
 
 # ─── NLP / Sentiment ───
-vaderSentiment==3.3.2
+textblob
+vaderSentiment
 
 # ─── Utilities ───
-aiohttp==3.11.11
-python-dateutil==2.9.0
-pydantic>=2.0.0
+aiohttp
+python-dateutil
+pydantic

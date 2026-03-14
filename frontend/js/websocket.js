@@ -15,15 +15,7 @@ class SmartPreWebSocket {
 
     connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        
-        // --- DEPLOYMENT CONFIG ---
-        // Change this URL to your Render backend URL (e.g., 'your-app.onrender.com')
-        const productionBackend = 'smart-pre-backend.onrender.com'; 
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const isProdBackend = window.location.hostname === productionBackend;
-        
-        const host = (isLocal || isProdBackend) ? window.location.host : productionBackend;
-        const wsUrl = `${protocol}//${host}/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
 
         try {
             this.ws = new WebSocket(wsUrl);
@@ -141,11 +133,11 @@ class SmartPreWebSocket {
                 break;
             case 'disconnected':
                 dot.classList.add('disconnected');
-                text.textContent = 'Backend Offline';
+                text.textContent = 'Reconnecting...';
                 break;
             case 'error':
                 dot.classList.add('disconnected');
-                text.textContent = 'Connection Error';
+                text.textContent = 'Error';
                 break;
         }
     }

@@ -8,25 +8,15 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ML models will be loaded lazily to save memory
-ML_AVAILABLE = False
-LSTMPredictor = None
-TransformerPredictor = None
-
-def _lazy_load_ml():
-    global ML_AVAILABLE, LSTMPredictor, TransformerPredictor
-    if LSTMPredictor is not None:
-        return
-    try:
-        from models.lstm_model import LSTMPredictor as LSTM
-        from models.transformer_model import TransformerPredictor as Trans
-        LSTMPredictor = LSTM
-        TransformerPredictor = Trans
-        ML_AVAILABLE = True
-        logger.info("PyTorch ML models loaded successfully")
-    except Exception as e:
-        ML_AVAILABLE = False
-        logger.warning(f"ML models not available (falling back to heuristic): {e}")
+# Try importing ML models — they may fail if PyTorch isn't available
+try:
+    from models.lstm_model import LSTMPredictor
+    from models.transformer_model import TransformerPredictor
+    ML_AVAILABLE = True
+    logger.info("PyTorch ML models loaded successfully")
+except Exception as e:
+    ML_AVAILABLE = False
+    logger.warning(f"ML models not available (falling back to heuristic): {e}")
 
 
 class PredictionAgent:
@@ -41,21 +31,12 @@ class PredictionAgent:
         self.transformer = None
         self._predictions: dict = {}
 
-        # Call lazy load
-        _lazy_load_ml()
-
         if ML_AVAILABLE:
             try:
                 self.lstm = LSTMPredictor(input_size=12)
-                logger.info("LSTM model initialized")
                 self.transformer = TransformerPredictor(input_size=12)
-                logger.info("Transformer model initialized")
             except Exception as e:
-                logger.warning(f"Failed to initialize ML models (likely OOM): {e}")
-                self.lstm = None
-                self.transformer = None
-                import gc
-                gc.collect()
+                logger.warning(f"Failed to initialize ML models: {e}")
 
     def predict(self, indicator_data: dict, symbol: str = "") -> dict:
         """

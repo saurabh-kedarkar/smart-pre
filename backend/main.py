@@ -101,19 +101,13 @@ async def analysis_loop():
     while True:
         try:
             results = {}
-            async def analyze_and_store(symbol):
+            for symbol in DEFAULT_SYMBOLS:
                 try:
                     result = await run_analysis_pipeline(symbol)
-                    return symbol, result
+                    results[symbol] = result
                 except Exception as e:
                     logger.error(f"Pipeline error for {symbol}: {e}")
-                    return symbol, {"symbol": symbol, "error": str(e)}
-
-            # Run all symbols in parallel for faster updates
-            analysis_tasks = [analyze_and_store(s) for s in DEFAULT_SYMBOLS]
-            pipeline_results = await asyncio.gather(*analysis_tasks)
-            
-            results = {symbol: res for symbol, res in pipeline_results}
+                    results[symbol] = {"symbol": symbol, "error": str(e)}
 
             # Broadcast to all WebSocket clients
             if ws_clients:
@@ -145,9 +139,6 @@ async def price_update_loop():
     global ws_clients
     while True:
         try:
-            # If in simulation mode, update prices every second for high frequency feel
-            data_agent.trigger_simulation_update()
-            
             if ws_clients:
                 prices = data_agent.get_all_prices()
                 payload = json.dumps({
@@ -177,46 +168,35 @@ async def price_update_loop():
 
 
 # ─── App Lifecycle ───────────────────────────────────
-async def background_startup():
-    """Heavy initialization in background to allow fast server boot."""
-    try:
-        logger.info("Background initialization starting in 2s...")
-        await asyncio.sleep(2)  # Let server bind first
-        
-        # Initialize data agent
-        await data_agent.initialize()
-        
-        # Start loops IMMEDIATELY after data is ready
-        global analysis_loop_task
-        analysis_loop_task = asyncio.create_task(analysis_loop())
-        asyncio.create_task(price_update_loop())
-        
-        # Start data streaming (background)
-        await data_agent.start_streaming()
-        
-        logger.info("✅ Background initialization complete")
-    except Exception as e:
-        logger.error(f"❌ Background initialization failed: {e}")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global analysis_loop_task
     logger.info("🚀 SmartPre AI Agent starting...")
+
+    # Initialize data agent
+    await data_agent.initialize()
     
-    # Start background initialization immediately but don't wait for it
-    asyncio.create_task(background_startup())
+    # Start data streaming
+    await data_agent.start_streaming()
+
+    # Start analysis loop
+    analysis_loop_task = asyncio.create_task(analysis_loop())
     
-    logger.info("✅ Server process started, background tasks queued")
+    # Start fast price update loop
+    price_update_task = asyncio.create_task(price_update_loop())
+    
+    logger.info("✅ Analysis pipeline and real-time streaming running")
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down SmartPre...")
-    try:
-        if 'analysis_loop_task' in globals() and analysis_loop_task:
-            analysis_loop_task.cancel()
-        await data_agent.stop()
-        await sentiment_agent.close()
-    except Exception as e:
-        logger.error(f"Error during shutdown: {e}")
+    if analysis_loop_task:
+        analysis_loop_task.cancel()
+    if 'price_update_task' in locals():
+        price_update_task.cancel()
+    await data_agent.stop()
+    await sentiment_agent.close()
 
 
 # ─── FastAPI App ─────────────────────────────────────
@@ -236,10 +216,7 @@ app.add_middleware(
 )
 
 # Serve frontend
-# Serve frontend assets
-app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
-app.mount("/js", StaticFiles(directory="../frontend/js"), name="js")
-app.mount("/css", StaticFiles(directory="../frontend/css"), name="css")
+app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 
 # ─── REST Endpoints ──────────────────────────────────
