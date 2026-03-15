@@ -178,11 +178,14 @@
 
    // ─── Data Fetching (REST fallback) ──────────────
    async function fetchInitialData() {
+      console.log('🔄 Fetching initial data via REST...');
+      
       try {
          // Fetch prices
          const priceResp = await fetch('/api/prices');
          if (priceResp.ok) {
             state.prices = await priceResp.json();
+            console.log('💰 Prices loaded:', Object.keys(state.prices).length, 'symbols');
             updatePriceDisplay(state.activeSymbol);
          }
       } catch (e) {
@@ -196,7 +199,25 @@
             const decisions = await decResp.json();
             if (Object.keys(decisions).length > 0) {
                state.decisions = decisions;
+               console.log('📊 Decisions loaded:', Object.keys(decisions).length, 'symbols');
                updateAllPanels();
+            } else {
+               console.log('No cached decisions yet, triggering analysis...');
+               // Trigger a fresh analysis for active symbol
+               try {
+                  const analysisResp = await fetch(`/api/analysis/${state.activeSymbol}`);
+                  if (analysisResp.ok) {
+                     const analysis = await analysisResp.json();
+                     if (analysis && analysis.action) {
+                        state.decisions[state.activeSymbol] = analysis;
+                        if (analysis.price) state.prices[state.activeSymbol] = analysis.price;
+                        console.log('✅ Fresh analysis loaded for', state.activeSymbol);
+                        updateAllPanels();
+                     }
+                  }
+               } catch (e) {
+                  console.log('Fresh analysis fetch failed:', e);
+               }
             }
          }
       } catch (e) {
@@ -208,25 +229,57 @@
    }
 
    async function loadChartData(symbol) {
+      const tf = window.chartManager ? window.chartManager.currentTimeframe : '1m';
       try {
-         const resp = await fetch(`/api/market/${symbol}`);
-         if (!resp.ok) return;
-         const data = await resp.json();
-         if (data.price) {
-            state.prices[symbol] = data.price;
-            updatePriceDisplay(symbol);
+         const resp = await fetch(`/api/klines/${symbol}?timeframe=${tf}`);
+         if (resp.ok) {
+            const candles = await resp.json();
+            if (candles && candles.length > 0) {
+               console.log(`📊 Loaded ${candles.length} candles for ${symbol}/${tf}`);
+               state.chartData[symbol] = candles;
+               state.currentCandles[symbol] = { ...candles[candles.length - 1] };
+               if (window.chartManager) {
+                  window.chartManager.updateCandles(candles);
+               }
+               // Also update price from latest candle
+               const latest = candles[candles.length - 1];
+               if (latest.close > 0) {
+                  state.prices[symbol] = latest.close;
+                  updatePriceDisplay(symbol);
+               }
+               return;
+            } else {
+               console.warn(`No candles returned for ${symbol}/${tf}`);
+            }
          }
       } catch (e) {
-         // Chart data will come via WebSocket
+         console.warn('Failed to fetch klines:', e);
       }
-
-      // Generate simulated candles for display if backend not available
-      if (window.chartManager) {
-         const price = state.prices[symbol] || 60000;
-         const candles = generateSimulatedCandles(price, 200);
-         state.chartData[symbol] = candles;
-         state.currentCandles[symbol] = { ...candles[candles.length - 1] };
-         window.chartManager.updateCandles(candles);
+      
+      // Fallback: try 1m if we requested a different timeframe
+      if (tf !== '1m') {
+         try {
+            const fallbackResp = await fetch(`/api/klines/${symbol}?timeframe=1m`);
+            if (fallbackResp.ok) {
+               const candles = await fallbackResp.json();
+               if (candles && candles.length > 0) {
+                  console.log(`📊 Fallback: Loaded ${candles.length} 1m candles for ${symbol}`);
+                  state.chartData[symbol] = candles;
+                  state.currentCandles[symbol] = { ...candles[candles.length - 1] };
+                  if (window.chartManager) {
+                     window.chartManager.updateCandles(candles);
+                  }
+                  const latest = candles[candles.length - 1];
+                  if (latest.close > 0) {
+                     state.prices[symbol] = latest.close;
+                     updatePriceDisplay(symbol);
+                  }
+                  return;
+               }
+            }
+         } catch (e) {
+            console.warn('Fallback 1m klines also failed:', e);
+         }
       }
    }
 
@@ -245,13 +298,13 @@
          candle.high = price;
          candle.low = price;
          candle.close = price;
-         candle.volume = Math.random() * 10 + 2; // Simulated increment
+         candle.volume = candle.volume; // No fake volume increment
       } else {
          // Update existing candle
          candle.close = price;
          candle.high = Math.max(candle.high, price);
          candle.low = Math.min(candle.low, price);
-         candle.volume += Math.random() * 0.5; // Simulated increment
+         candle.volume = candle.volume; // No fake volume increment
       }
 
       window.chartManager.addCandle(candle);
@@ -414,17 +467,9 @@
             if (window.chartManager) {
                window.chartManager.setTimeframe(tf);
             }
-            // Re-generate chart for new timeframe
-            const price = state.prices[state.activeSymbol] || 60000;
-            const multiplier = tf === '1m' ? 60 : tf === '5m' ? 300 : tf === '15m' ? 900 : 3600;
-            const candles = generateSimulatedCandlesTF(price, 200, multiplier);
-
-            // Critical fix: update state to track the new timeframe's last candle
-            state.chartData[state.activeSymbol] = candles;
-            state.currentCandles[state.activeSymbol] = { ...candles[candles.length - 1] };
-
-            if (window.chartManager) {
-               window.chartManager.updateCandles(candles);
+            // Fetch real data for new timeframe
+            if (state.activeSymbol) {
+               loadChartData(state.activeSymbol);
             }
          });
       });

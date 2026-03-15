@@ -43,11 +43,11 @@ ML_PREDICTION_WEIGHT = 0.40
 MAX_RISK_PER_TRADE = 0.02     # 2% risk
 DEFAULT_STOP_LOSS_PCT = 0.005  # 0.5%
 DEFAULT_TAKE_PROFIT_PCT = 0.01 # 1.0%
-MIN_CONFIDENCE_TO_TRADE = 0.60
+MIN_CONFIDENCE_TO_TRADE = 0.50
 
 # ─── Server ───
 SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 8000
+SERVER_PORT = int(os.getenv("PORT", "8000"))  # Render sets $PORT automatically
 WS_HEARTBEAT_INTERVAL = 30
 
 # ─── News / Sentiment APIs (placeholders) ───

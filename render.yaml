@@ -1,13 +1,14 @@
 services:
   - type: web
-    name: smart-pre-backend
-    env: python
-    buildCommand: "python -m pip install --upgrade pip && python -m pip install --no-cache-dir -r backend/requirements.txt"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    name: smartpre-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r backend/requirements.txt"
+    startCommand: "cd backend && python main.py"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: BINANCE_API_KEY
-        sync: false
-      - key: BINANCE_API_SECRET
-        sync: false
+        value: "3.11.9"
+      - key: RENDER
+        value: "true"
+    healthCheckPath: /api/health

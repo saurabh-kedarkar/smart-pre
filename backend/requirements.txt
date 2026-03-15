@@ -11,15 +11,17 @@ pandas
 ta
 scikit-learn
 
-# ─── ML / Deep Learning ───
-torch
-transformers
-
 # ─── NLP / Sentiment ───
-textblob
 vaderSentiment
 
 # ─── Utilities ───
 aiohttp
 python-dateutil
 pydantic
+
+# ─── ML / Deep Learning (OPTIONAL — only install locally) ───
+# torch
+# transformers
+# These are too large for Render free tier (2GB+).
+# The app works perfectly without them using heuristic predictions.
+# Install locally with: pip install torch transformers

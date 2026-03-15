@@ -5,14 +5,21 @@ FastAPI Backend Server
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+# ─── Path Resolution ────────────────────────────────
+# Works both locally (from backend/) and on Render (from repo root cd backend)
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 from config import DEFAULT_SYMBOLS, SERVER_HOST, SERVER_PORT
 from agents.data_agent import DataAgent
@@ -59,40 +66,77 @@ async def run_analysis_pipeline(symbol: str) -> dict:
     """
     logger.info(f"Running analysis pipeline for {symbol}...")
 
-    # Step 1: Data
-    await data_agent.refresh_data(symbol)
-    candles = data_agent.get_candles(symbol, "1m")
-    price = data_agent.get_price(symbol)
+    try:
+        # Step 1: Data
+        await data_agent.refresh_data(symbol)
+        candles = data_agent.get_candles(symbol, "1m")
+        price = data_agent.get_price(symbol)
 
-    if candles is None or price <= 0:
-        logger.warning(f"No data available for {symbol}")
-        return {"symbol": symbol, "error": "No data available"}
+        if candles is None or len(candles) == 0 or price <= 0:
+            logger.warning(f"No data available for {symbol}")
+            return {"symbol": symbol, "error": "No data available"}
 
-    # Step 2: Technical Analysis
-    ta = technical_agent.analyze(candles, symbol)
+        # Step 2: Technical Analysis
+        try:
+            ta = technical_agent.analyze(candles, symbol)
+        except Exception as e:
+            logger.error(f"Technical analysis failed for {symbol}: {e}")
+            ta = technical_agent._empty_analysis(symbol)
 
-    # Step 3: Sentiment
-    sa = await sentiment_agent.analyze_sentiment(symbol)
+        # Step 3: Sentiment
+        try:
+            sa = await sentiment_agent.analyze_sentiment(symbol)
+        except Exception as e:
+            logger.error(f"Sentiment analysis failed for {symbol}: {e}")
+            sa = {"sentiment": "NEUTRAL", "composite_score": 0.0, "fear_greed": {}}
 
-    # Step 4: ML Prediction
-    indicator_data = technical_agent.get_indicator_data_for_ml(candles)
-    pred = prediction_agent.predict(indicator_data, symbol)
+        # Step 4: ML Prediction
+        try:
+            indicator_data = technical_agent.get_indicator_data_for_ml(candles)
+            pred = prediction_agent.predict(indicator_data, symbol)
+        except Exception as e:
+            logger.error(f"Prediction failed for {symbol}: {e}")
+            pred = prediction_agent._empty_prediction(symbol)
 
-    # Step 5: Trading Signal
-    sig = signal_agent.generate_signal(symbol, price, ta, pred, sa)
+        # Step 5: Trading Signal
+        try:
+            sig = signal_agent.generate_signal(symbol, price, ta, pred, sa)
+        except Exception as e:
+            logger.error(f"Signal generation failed for {symbol}: {e}")
+            sig = signal_agent._empty_signal(symbol)
 
-    # Step 6: Risk
-    risk = risk_agent.evaluate_risk(sig, ta)
+        # Step 6: Risk
+        try:
+            risk = risk_agent.evaluate_risk(sig, ta)
+        except Exception as e:
+            logger.error(f"Risk evaluation failed for {symbol}: {e}")
+            risk = {"risk_level": "UNKNOWN", "should_trade": False, "warnings": [str(e)]}
 
-    # Step 7: Final Decision
-    decision = decision_agent.decide(symbol, sig, risk, pred, sa, ta)
+        # Step 7: Final Decision
+        try:
+            decision = decision_agent.decide(symbol, sig, risk, pred, sa, ta)
+        except Exception as e:
+            logger.error(f"Decision engine failed for {symbol}: {e}")
+            decision = {
+                "symbol": symbol,
+                "action": "HOLD",
+                "confidence": 0.5,
+                "confidence_pct": 50.0,
+                "reason": f"Decision error: {str(e)}",
+                "price": price,
+            }
 
-    logger.info(
-        f"{symbol}: {decision['action']} | Confidence: {decision['confidence_pct']}% | "
-        f"Price: {price}"
-    )
+        logger.info(
+            f"{symbol}: {decision.get('action', 'N/A')} | "
+            f"Confidence: {decision.get('confidence_pct', 0)}% | "
+            f"Price: {price}"
+        )
 
-    return decision
+        return decision
+
+    except Exception as e:
+        logger.error(f"Pipeline critical error for {symbol}: {e}", exc_info=True)
+        return {"symbol": symbol, "error": str(e), "action": "HOLD", "confidence_pct": 50.0}
 
 
 async def analysis_loop():
@@ -124,8 +168,8 @@ async def analysis_loop():
                         disconnected.add(ws)
                 ws_clients.difference_update(disconnected)
 
-            # Wait before next cycle (30 seconds)
-            await asyncio.sleep(30)
+            # Wait before next cycle (5 seconds)
+            await asyncio.sleep(5)
 
         except asyncio.CancelledError:
             break
@@ -215,15 +259,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+# Serve frontend (using absolute path for reliability on Render)
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 # ─── REST Endpoints ──────────────────────────────────
 @app.get("/")
 async def serve_dashboard():
     """Serve the main dashboard."""
-    return FileResponse("../frontend/index.html")
+    return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
 @app.get("/api/health")
@@ -241,6 +285,43 @@ async def get_symbols():
 async def get_all_prices():
     """Get current prices for all symbols."""
     return data_agent.get_all_prices()
+
+
+@app.get("/api/klines/{symbol}")
+async def get_klines(symbol: str, timeframe: str = "1m"):
+    """Get candlestick data for a symbol."""
+    symbol = symbol.upper()
+    
+    # Try to get existing candles
+    df = data_agent.get_candles(symbol, timeframe)
+    
+    # If no cached data for this timeframe, try fetching fresh
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        try:
+            await data_agent.refresh_data(symbol)
+            df = data_agent.get_candles(symbol, timeframe)
+        except Exception as e:
+            logger.error(f"Failed to fetch klines for {symbol}/{timeframe}: {e}")
+    
+    if df is None or (hasattr(df, 'empty') and df.empty):
+        return []
+    
+    candles = []
+    for ts, row in df.iterrows():
+        try:
+            candles.append({
+                "time": int(ts.value // 10**9),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"])
+            })
+        except (ValueError, KeyError) as e:
+            logger.warning(f"Bad candle data at {ts}: {e}")
+            continue
+    
+    return candles
 
 
 @app.get("/api/analysis/{symbol}")
@@ -365,10 +446,11 @@ async def websocket_endpoint(websocket: WebSocket):
 # ─── Run ─────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
+    is_production = os.getenv("RENDER", "") != "" or os.getenv("PORT", "") != ""
     uvicorn.run(
         "main:app",
         host=SERVER_HOST,
         port=SERVER_PORT,
-        reload=True,
+        reload=not is_production,  # Disable reload in production
         log_level="info",
     )

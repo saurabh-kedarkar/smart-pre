@@ -37,12 +37,13 @@ class DecisionAgent:
         signal_type = signal.get("signal", "HOLD")
         confidence = signal.get("confidence", 0.5)
         should_trade = risk.get("should_trade", False)
-        risk_level = risk.get("risk_level", "HIGH")
-        pred_direction = prediction.get("direction", "NEUTRAL")
-        pred_15m = prediction.get("prediction_15m", {})
+        pred_1m = prediction.get("prediction_1m", {})
+        pred_5m = prediction.get("prediction_5m", {})
+        pred_direction = prediction.get("direction", "NEUTRAL")  # FIX: was undefined
         sent_label = sentiment.get("sentiment", "NEUTRAL")
         market_structure = technical.get("market_structure", {})
         overall_ta = technical.get("overall_signal", "NEUTRAL")
+        risk_level = risk.get("risk_level", "UNKNOWN")  # FIX: was undefined
 
         # ── Agreement check ──────────────────────────────
         # Count how many systems agree on direction
@@ -76,24 +77,24 @@ class DecisionAgent:
         if not should_trade:
             final_action = "HOLD"
             reason = "Risk assessment recommends skipping this trade"
-        elif bullish_count >= 4:
+        elif bullish_count >= 3:
             final_action = "BUY"
-            reason = "PREMIUM Signal: All 4 systems (Technical, AI, Sentiment, Signal) agree on BULLISH"
-        elif bearish_count >= 4:
+            reason = "PREMIUM Signal: Strong majority (3+ systems) agree on BULLISH"
+        elif bearish_count >= 3:
             final_action = "SELL"
-            reason = "PREMIUM Signal: All 4 systems (Technical, AI, Sentiment, Signal) agree on BEARISH"
-        elif bullish_count >= 3 and confidence > 0.75:
+            reason = "PREMIUM Signal: Strong majority (3+ systems) agree on BEARISH"
+        elif bullish_count >= 2 and confidence >= 0.55:
             final_action = "BUY"
-            reason = "Strong consensus (3/4) with high probability"
-        elif bearish_count >= 3 and confidence > 0.75:
+            reason = "Good consensus (2/4) with decent confidence"
+        elif bearish_count >= 2 and confidence >= 0.55:
             final_action = "SELL"
-            reason = "Strong consensus (3/4) with high probability"
-        elif agreement_count >= 3 and confidence > 0.85:
+            reason = "Good consensus (2/4) with decent confidence"
+        elif agreement_count >= 2 and confidence >= 0.65:
             final_action = "BUY" if bullish_count > bearish_count else "SELL"
             reason = "High confidence outweighing minor system disagreement"
         else:
             final_action = "HOLD"
-            reason = "Insufficient consensus or low confidence — optimized for safety"
+            reason = "Wait for clearer setup — optimized for safety"
 
         # ── Summary ──────────────────────────────────────
         decision = {
@@ -108,22 +109,28 @@ class DecisionAgent:
                 "entry": signal.get("entry_price"),
                 "target_1": signal.get("target_1"),
                 "target_2": signal.get("target_2"),
+                "target_3": signal.get("target_3"),
                 "stop_loss": signal.get("stop_loss"),
                 "risk_reward": signal.get("risk_reward_ratio"),
+                "breakdown": signal.get("breakdown", {}),
             },
             "risk": {
                 "level": risk_level,
                 "should_trade": should_trade,
                 "position_value": risk.get("position_value"),
                 "max_loss": risk.get("max_loss"),
+                "potential_gain": risk.get("potential_gain"),
+                "risk_pct": risk.get("risk_pct"),
                 "warnings": risk.get("warnings", []),
+                "recommendation": risk.get("recommendation", ""),
             },
             "prediction": {
                 "direction": pred_direction,
                 "confidence": prediction.get("confidence"),
-                "next_5m": prediction.get("prediction_5m", {}),
-                "next_15m": pred_15m,
+                "next_1m": pred_1m,
+                "next_5m": pred_5m,
                 "breakout_probability": prediction.get("breakout_probability"),
+                "models": prediction.get("models", {}),
             },
             "sentiment": {
                 "label": sent_label,
@@ -145,6 +152,12 @@ class DecisionAgent:
         }
 
         self._decisions[symbol] = decision
+        logger.info(
+            f"Decision for {symbol}: {final_action} | "
+            f"Confidence: {confidence*100:.1f}% | "
+            f"Bull: {bullish_count} Bear: {bearish_count} | "
+            f"Reason: {reason}"
+        )
         return decision
 
     def get_decision(self, symbol: str) -> dict:
@@ -152,6 +165,7 @@ class DecisionAgent:
             "symbol": symbol,
             "action": "HOLD",
             "confidence": 0.50,
+            "confidence_pct": 50.0,
             "reason": "No analysis available",
         })
 

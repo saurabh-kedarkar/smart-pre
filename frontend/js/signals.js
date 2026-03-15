@@ -70,7 +70,12 @@ class SignalManager {
       this._setText('sig-target2', this._formatPrice(signal.target_2));
       this._setText('sig-target3', this._formatPrice(signal.target_3));
       this._setText('sig-stoploss', this._formatPrice(signal.stop_loss));
-      this._setText('sig-rr', signal.risk_reward ? `${signal.risk_reward.toFixed(1)}:1` : '--');
+      
+      const rr = signal.risk_reward;
+      this._setText('sig-rr', (rr && rr > 0) ? `${rr.toFixed(1)}:1` : '--');
+      
+      // Log signal for debugging
+      console.log(`📡 Signal: ${type} | Entry: ${signal.entry} | Target1: ${signal.target_1} | SL: ${signal.stop_loss} | RR: ${rr}`);
    }
 
    _updateRiskCard(risk) {
@@ -133,13 +138,13 @@ class SignalManager {
       if (conf) conf.textContent = `${confidence}%`;
 
       // Timeframes
+      const pred1m = pred.next_1m || {};
       const pred5m = pred.next_5m || {};
-      const pred15m = pred.next_15m || {};
 
+      this._setText('pred-1m', pred1m.direction || '--');
+      this._setText('pred-1m-prob', `${(pred1m.probability || 50).toFixed(0)}%`);
       this._setText('pred-5m', pred5m.direction || '--');
       this._setText('pred-5m-prob', `${(pred5m.probability || 50).toFixed(0)}%`);
-      this._setText('pred-15m', pred15m.direction || '--');
-      this._setText('pred-15m-prob', `${(pred15m.probability || 50).toFixed(0)}%`);
       this._setText('pred-breakout', pred.breakout_probability ?
          (pred.breakout_probability > 0.5 ? 'Likely' : 'Unlikely') : '--');
       this._setText('pred-breakout-prob',

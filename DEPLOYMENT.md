@@ -1,63 +1,59 @@
-# 🚀 Deployment Guide: SmartPre AI Trading Agent
+# 🚀 SmartPre Deployment Guide
 
-Follow these steps to deploy your trading agent for **FREE** using modern cloud platforms.
+## Quick Deploy to Render (5 Minutes)
 
-## 1. Prepare your Codebase
-Ensure your project structure looks like this:
-```
-/smart-pre
-  /backend
-    main.py
-    requirements.txt
-    ...
-  /frontend
-    index.html
-    static/
-    ...
+### Step 1: Push to GitHub
+```bash
+git add .
+git commit -m "Production ready"
+git push origin main
 ```
 
-## 2. Backend Deployment (FastAPI/Python)
-We recommend **Render** or **Koyeb** for the backend.
-
-### Option A: Render (Easiest)
-1. Push your code to a **GitHub** repository.
-2. Go to [Render.com](https://render.com/) and create a new **Web Service**.
-3. Connect your GitHub repo.
-4. Settings:
-   - **Environment**: `Python`
-   - **Build Command**: `pip install -r backend/requirements.txt`
-   - **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-5. Add **Environment Variables**:
-   - `BINANCE_API_KEY`: Your key
-   - `BINANCE_API_SECRET`: Your secret
-6. Click **Deploy**. Render will give you a URL like `https://smart-pre-backend.onrender.com`.
-
-## 3. Frontend Deployment (Static HTML/JS)
-You can use **Vercel** or **Netlify**.
-
-### Option A: Vercel
-1. Go to [Vercel.com](https://vercel.com/) and create a new project.
-2. Connect your GitHub repo.
+### Step 2: Deploy on Render
+1. Go to [Render.com](https://render.com/) → **New** → **Web Service**
+2. Connect your **GitHub repo**
 3. Settings:
-   - **Framework Preset**: `Other`
-   - **Root Directory**: `frontend`
-4. Click **Deploy**. Vercel will give you a URL like `https://smart-pre.vercel.app`.
+   - **Name**: `smartpre` (or any name)
+   - **Region**: Oregon (US West)
+   - **Branch**: `main`
+   - **Runtime**: `Python`
+   - **Build Command**: `pip install --upgrade pip && pip install --no-cache-dir -r backend/requirements.txt`
+   - **Start Command**: `cd backend && python main.py`
+   - **Plan**: Free
+4. **Environment Variables** (click "Add Environment Variable"):
+   - `PYTHON_VERSION` = `3.11.9`
+   - `RENDER` = `true`
+5. Click **Deploy Web Service**
 
-## 4. Connect Frontend to Backend
-Once you have your backend URL from Render, update your frontend configuration:
-1. Open `frontend/js/websocket.js`.
-2. Find the WebSocket connection logic and update the URL:
-   ```javascript
-   // Replace localhost with your Render URL (use wss:// for production)
-   const backendUrl = 'smart-pre-backend.onrender.com'; 
-   this.socket = new WebSocket(`wss://${backendUrl}/ws`);
-   ```
-3. Re-deploy the frontend.
+### Step 3: Wait & Access
+- Render will build (~3-5 minutes)
+- Your site will be live at: `https://smartpre-XXXX.onrender.com`
+- Everything works: Dashboard, Charts, WebSocket, Signals — all from single URL
 
-## 5. Free Database (Optional)
-If you add a database later for trade history:
-- Use [Neon.tech](https://neon.tech/) for free **PostgreSQL**.
-- Use [Upstash](https://upstash.com/) for free **Redis** (caching).
+## How It Works
+- Backend (FastAPI) serves the frontend HTML/CSS/JS directly
+- WebSocket auto-detects the host (`wss://your-app.onrender.com/ws`)
+- No separate frontend deployment needed!
+- Real-time Binance data streams via WebSocket
+- AI analysis runs every 5 seconds
 
----
-**Note:** Render's free tier "sleeps" after 15 minutes of inactivity. For 24/7 trading, you might eventually need a $7/mo plan or a VPS (like a $5 DigitalOcean droplet).
+## Important Notes
+- **Free tier**: App sleeps after 15 min of inactivity. First request takes ~30 seconds to wake up.
+- **Paid tier** ($7/mo): 24/7 uptime, better performance.
+- **No API keys needed**: Uses public Binance endpoints (no authentication required).
+
+## Troubleshooting
+If deploy fails:
+1. Check Render logs for errors
+2. Make sure `requirements.txt` doesn't include `torch` or `transformers` (too large)
+3. Check `/api/health` endpoint works: `https://your-app.onrender.com/api/health`
+
+## Local Development
+```bash
+cd backend
+python -m venv venv_win
+.\venv_win\Scripts\activate     # Windows
+pip install -r requirements.txt
+python main.py
+```
+Open http://localhost:8000

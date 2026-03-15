@@ -85,12 +85,12 @@ class PredictionAgent:
             transformer_pred.get("predicted_return", 0) * transformer_weight
         )
 
-        pred_5m = self._extrapolate_timeframe(direction, confidence, factor=0.33)
-        pred_15m = {
+        pred_1m = {
             "direction": direction,
             "confidence": round(confidence, 4),
             "probability": round(confidence * 100, 1),
         }
+        pred_5m = self._extrapolate_timeframe(direction, confidence, factor=0.66)
 
         volatility = transformer_pred.get("predicted_volatility", 0)
         breakout_prob = min(0.95, abs(avg_return) * 50 + volatility * 10 + 0.1)
@@ -100,8 +100,8 @@ class PredictionAgent:
             "direction": direction,
             "confidence": round(confidence, 4),
             "predicted_return": round(float(avg_return), 6),
+            "prediction_1m": pred_1m,
             "prediction_5m": pred_5m,
-            "prediction_15m": pred_15m,
             "breakout_probability": round(float(breakout_prob), 4),
             "models": {
                 "lstm": lstm_pred,
@@ -186,12 +186,12 @@ class PredictionAgent:
 
         confidence = min(0.85, max(0.50, confidence))
 
-        pred_5m = self._extrapolate_timeframe(direction, confidence, factor=0.33)
-        pred_15m = {
+        pred_1m = {
             "direction": direction,
             "confidence": round(confidence, 4),
             "probability": round(confidence * 100, 1),
         }
+        pred_5m = self._extrapolate_timeframe(direction, confidence, factor=0.66)
 
         breakout_prob = min(0.6, abs(composite) * 0.5 + 0.1)
 
@@ -200,8 +200,8 @@ class PredictionAgent:
             "direction": direction,
             "confidence": round(confidence, 4),
             "predicted_return": round(float(price_change * 0.3), 6),
+            "prediction_1m": pred_1m,
             "prediction_5m": pred_5m,
-            "prediction_15m": pred_15m,
             "breakout_probability": round(float(breakout_prob), 4),
             "models": {
                 "lstm": {"direction": direction, "confidence": round(confidence * 0.95, 4), "model": "heuristic"},
@@ -229,8 +229,8 @@ class PredictionAgent:
             "direction": "NEUTRAL",
             "confidence": 0.50,
             "predicted_return": 0.0,
+            "prediction_1m": {"direction": "NEUTRAL", "confidence": 0.50, "probability": 50.0},
             "prediction_5m": {"direction": "NEUTRAL", "confidence": 0.50, "probability": 50.0},
-            "prediction_15m": {"direction": "NEUTRAL", "confidence": 0.50, "probability": 50.0},
             "breakout_probability": 0.10,
             "models": {},
         }

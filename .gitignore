@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+venv_win/
 .venv/
 env/
 .env
@@ -16,3 +17,12 @@ dist/
 # Frontend
 node_modules/
 .DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp/test files
+compare_prices.py
