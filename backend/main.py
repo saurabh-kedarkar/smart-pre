@@ -330,14 +330,14 @@ async def get_market_summary(symbol: str):
 @app.get("/api/decisions")
 async def get_all_decisions():
     """Get all current decisions for every tracked symbol."""
-    return decision_agent.get_all_decisions()
+    return json_serializable(decision_agent.get_all_decisions())
 
 
 @app.get("/api/history/{symbol}")
 async def get_history(symbol: str, timeframe: str = Query("15m")):
     """Get historical candles for the chart."""
     symbol = symbol.upper()
-    return data_agent.get_history(symbol, timeframe)
+    return json_serializable(data_agent.get_history(symbol, timeframe))
 
 
 from agents.backtest_agent import BacktestAgent
