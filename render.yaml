@@ -8,7 +8,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.9.6
       - key: BINANCE_BASE_URL
-        value: https://api.binance.us
+        value: https://data-api.binance.vision
       - key: PORT
         value: 10000
     plan: free
