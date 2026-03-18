@@ -10,7 +10,8 @@ import websockets
 
 logger = logging.getLogger(__name__)
 
-BINANCE_WS_BASE = "wss://stream.binance.com:9443/ws"
+# Use binance.us to bypass US cloud provider geo-blocks
+BINANCE_WS_BASE = "wss://stream.binance.us:9443/ws"
 
 
 class WebSocketManager:

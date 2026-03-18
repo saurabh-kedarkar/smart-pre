@@ -6,15 +6,12 @@ import os
 # ─── Binance API ───
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
-# api3 is often more stable and less likely to be blocked by cloud providers like Render
-BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api3.binance.com")
+# Use binance.us to avoid geo-blocking from US cloud providers (like Render)
+BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.us")
 BINANCE_ENDPOINTS = [
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api3.binance.com",
-    "https://api.binance.com",
+    "https://api.binance.us"
 ]
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
+BINANCE_WS_URL = "wss://stream.binance.us:9443/ws"
 
 # ─── Trading Pairs ───
 DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "PAXGUSDT"]
