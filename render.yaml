@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: smartpre-ai-crypto
+    env: python
+    buildCommand: "cd backend && pip install -r requirements.txt"
+    startCommand: "cd backend && gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.6
+      - key: BINANCE_BASE_URL
+        value: https://api3.binance.com
+      - key: PORT
+        value: 10000
+    plan: free
+    healthCheckPath: /api/health

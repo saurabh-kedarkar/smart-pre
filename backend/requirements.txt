@@ -1,0 +1,26 @@
+# ─── Core ───
+fastapi
+uvicorn[standard]
+websockets
+httpx
+python-dotenv
+gunicorn
+
+# ─── Data & Analysis ───
+numpy
+pandas
+ta
+scikit-learn
+
+# ─── ML / Deep Learning ───
+torch
+transformers
+
+# ─── NLP / Sentiment ───
+textblob
+vaderSentiment
+
+# ─── Utilities ───
+aiohttp
+python-dateutil
+pydantic
