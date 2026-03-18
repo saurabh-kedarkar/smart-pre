@@ -7,6 +7,7 @@ import os
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 # Use data-api.binance.vision to avoid ANY geo-blocking from US cloud providers
+# Use data-api.binance.vision to avoid ANY geo-blocking from US cloud providers
 BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://data-api.binance.vision")
 BINANCE_ENDPOINTS = [
     "https://data-api.binance.vision"
