@@ -239,8 +239,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+# Serve frontend static assets (css, js, static/assets)
+app.mount("/static/css", StaticFiles(directory="../frontend/css"), name="static-css")
+app.mount("/static/js", StaticFiles(directory="../frontend/js"), name="static-js")
+app.mount("/static/assets", StaticFiles(directory="../frontend/static/assets"), name="static-assets")
 
 
 # ─── REST Endpoints ──────────────────────────────────
@@ -257,8 +259,8 @@ async def health():
 
 @app.get("/api/symbols")
 async def get_symbols():
-    """Get list of tracked symbols."""
-    return {"symbols": DEFAULT_SYMBOLS}
+    """Get list of tracked symbols (excludes geo-blocked ones)."""
+    return {"symbols": data_agent.symbols}
 
 
 @app.get("/api/prices")
@@ -323,6 +325,12 @@ async def get_market_summary(symbol: str):
     """Get market data summary."""
     symbol = symbol.upper()
     return data_agent.get_market_summary(symbol)
+
+
+@app.get("/api/decisions")
+async def get_all_decisions():
+    """Get all current decisions for every tracked symbol."""
+    return decision_agent.get_all_decisions()
 
 
 @app.get("/api/history/{symbol}")

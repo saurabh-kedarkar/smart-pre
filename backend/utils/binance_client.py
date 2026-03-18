@@ -3,6 +3,7 @@ Binance API Client — fetches OHLCV, order book, and ticker data.
 """
 import asyncio
 import time
+import logging
 import httpx
 import numpy as np
 import pandas as pd
@@ -10,6 +11,17 @@ from typing import Optional, Union
 
 
 from config import BINANCE_BASE_URL
+
+logger = logging.getLogger(__name__)
+
+# Symbols known to be geo-restricted on cloud providers (HTTP 451)
+_blocked_symbols: set = set()
+
+
+class GeoBlockedError(Exception):
+    """Raised when Binance returns HTTP 451 for a geo-restricted symbol."""
+    pass
+
 
 class BinanceClient:
     """Async Binance REST + WebSocket client."""
@@ -23,15 +35,34 @@ class BinanceClient:
 
     # ── REST helpers ────────────────────────────────────────
     async def _get(self, path: str, params: dict = None, retries: int = 3) -> Union[dict, list]:
+        symbol = (params or {}).get("symbol", "")
+
+        # Skip symbols that are known to be geo-restricted
+        if symbol and symbol in _blocked_symbols:
+            raise GeoBlockedError(f"{symbol} is geo-restricted on this server")
+
         for attempt in range(retries):
             try:
                 resp = await self._http.get(path, params=params)
+                # Handle HTTP 451: Unavailable For Legal Reasons (geo-block)
+                if resp.status_code == 451:
+                    if symbol:
+                        _blocked_symbols.add(symbol)
+                    logger.warning(
+                        f"⚠️  HTTP 451 (geo-restricted) for {symbol or path}. "
+                        f"This symbol is blocked from this server's region. Skipping."
+                    )
+                    raise GeoBlockedError(
+                        f"{symbol or path} is geo-restricted (HTTP 451)"
+                    )
                 resp.raise_for_status()
                 return resp.json()
+            except GeoBlockedError:
+                raise  # Don't retry geo-blocks
             except Exception as e:
                 if attempt == retries - 1:
                     raise e
-                await asyncio.sleep(1) # Wait before retry
+                await asyncio.sleep(1)  # Wait before retry
 
     # ── Public endpoints ────────────────────────────────────
     async def get_klines(self, symbol: str, interval: str = "1m",
