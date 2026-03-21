@@ -262,6 +262,12 @@ async def health():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat() + "Z"}
 
 
+@app.get("/api/decisions")
+async def get_all_decisions():
+    """Get all current decisions."""
+    return decision_agent.get_all_decisions()
+
+
 @app.get("/api/symbols")
 async def get_symbols():
     """Get list of tracked symbols."""
