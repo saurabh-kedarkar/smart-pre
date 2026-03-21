@@ -9,13 +9,13 @@ BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 # api3 is often more stable and less likely to be blocked by cloud providers like Render
 BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api3.binance.com")
 BINANCE_ENDPOINTS = [
+    # ── Binance US mirror (not geo-blocked) ──
+    "https://api.binance.us",
     "https://api3.binance.com",
     "https://api1.binance.com",
     "https://api2.binance.com",
     "https://api4.binance.com",
     "https://api.binance.com",
-    # ── Binance US mirror (not geo-blocked) ──
-    "https://api.binance.us",
 ]
 BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
 
