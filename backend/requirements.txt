@@ -13,7 +13,7 @@ ta
 scikit-learn
 
 # ─── ML / Deep Learning ───
-torch
+torch --index-url https://download.pytorch.org/whl/cpu
 transformers
 
 # ─── NLP / Sentiment ───

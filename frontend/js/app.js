@@ -208,7 +208,7 @@
       try {
          const n = new Notification('🟢 SmartPre Active', {
             body: 'Trading alerts are now active for BUY and SELL signals.',
-            icon: '/static/assets/favicon.png',
+            icon: '/static/static/assets/favicon.png', // Try both common paths
             tag: 'smartpre-welcome',
          });
          console.log('🔔 Test notification sent');
@@ -259,7 +259,7 @@
          try {
             const notif = new Notification(title, {
                body: body,
-               icon: '/static/assets/favicon.png',
+               icon: '/static/static/assets/favicon.png',
                tag: `smartpre-${symbol}`,
                requireInteraction: true,
                silent: false,

@@ -3,13 +3,23 @@ services:
     name: smartpre-ai-crypto
     env: python
     buildCommand: "cd backend && pip install -r requirements.txt"
-    startCommand: "cd backend && gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app"
+    startCommand: "cd backend && gunicorn -w 1 -k uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 30 main:app"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.6
+        value: "3.11.0"
       - key: BINANCE_BASE_URL
-        value: https://data-api.binance.vision
+        value: "https://api3.binance.com"
+      # ── Critical for Render: Enable REST polling (Binance WS is blocked) ──
+      - key: USE_REST_POLLING
+        value: "true"
+      - key: REST_POLL_INTERVAL
+        value: "3"
+      # ── Optional: Use proxy if direct Binance REST is also blocked ──
+      - key: USE_BINANCE_PROXY
+        value: "false"
+      - key: BINANCE_PROXY_URL
+        value: ""
       - key: PORT
-        value: 10000
+        value: "10000"
     plan: free
     healthCheckPath: /api/health

@@ -1,68 +1,122 @@
 """
 Binance API Client — fetches OHLCV, order book, and ticker data.
+Uses multiple API mirrors and a proxy fallback for cloud deployment (Render etc.)
 """
 import asyncio
 import time
-import logging
 import httpx
 import numpy as np
 import pandas as pd
+import logging
+import os
 from typing import Optional, Union
 
 
-from config import BINANCE_BASE_URL
+from config import BINANCE_BASE_URL, BINANCE_ENDPOINTS
 
 logger = logging.getLogger(__name__)
 
-# Symbols known to be geo-restricted on cloud providers (HTTP 451)
-_blocked_symbols: set = set()
+# ── Proxy Configuration ──────────────────────────────
+# If Binance is blocked on the hosting platform, route through a CORS/proxy service.
+# Set BINANCE_PROXY_URL env var to use a custom proxy, or leave empty for direct.
+# Popular free options:
+#   - https://corsproxy.io/?
+#   - https://api.allorigins.win/raw?url=
+BINANCE_PROXY_URL = os.getenv("BINANCE_PROXY_URL", "")
+
+# If true, all Binance requests go through the proxy
+USE_PROXY = os.getenv("USE_BINANCE_PROXY", "false").lower() in ("true", "1", "yes")
 
 
-class GeoBlockedError(Exception):
-    """Raised when Binance returns HTTP 451 for a geo-restricted symbol."""
-    pass
+def _proxy_url(original_url: str) -> str:
+    """Wrap a URL through the configured proxy if enabled."""
+    if USE_PROXY and BINANCE_PROXY_URL:
+        return f"{BINANCE_PROXY_URL}{original_url}"
+    return original_url
 
 
 class BinanceClient:
-    """Async Binance REST + WebSocket client."""
+    """Async Binance REST client with automatic endpoint failover."""
 
     def __init__(self):
-        self._http = httpx.AsyncClient(
-            base_url=BINANCE_BASE_URL,
-            timeout=15.0,
+        # List of base URLs to try in order
+        self._endpoints = list(BINANCE_ENDPOINTS)
+        self._current_endpoint_idx = 0
+        self._http = self._create_client(self._endpoints[0])
+
+    def _create_client(self, base_url: str) -> httpx.AsyncClient:
+        """Create an HTTP client — uses proxy if configured."""
+        if USE_PROXY and BINANCE_PROXY_URL:
+            # When using proxy, we don't set base_url because the full URL
+            # is built differently
+            return httpx.AsyncClient(
+                timeout=20.0,
+                headers={"Accept": "application/json"},
+                follow_redirects=True,
+            )
+        return httpx.AsyncClient(
+            base_url=base_url,
+            timeout=20.0,
             headers={"Accept": "application/json"},
+            follow_redirects=True,
         )
+
+    async def _rotate_endpoint(self) -> None:
+        """Switch to the next available Binance API endpoint."""
+        await self._http.aclose()
+        self._current_endpoint_idx = (self._current_endpoint_idx + 1) % len(self._endpoints)
+        new_base = self._endpoints[self._current_endpoint_idx]
+        logger.info(f"Rotating to Binance endpoint: {new_base}")
+        self._http = self._create_client(new_base)
 
     # ── REST helpers ────────────────────────────────────────
     async def _get(self, path: str, params: dict = None, retries: int = 3) -> Union[dict, list]:
-        symbol = (params or {}).get("symbol", "")
+        last_error = None
+        # Try each endpoint
+        for endpoint_attempt in range(len(self._endpoints)):
+            for attempt in range(retries):
+                try:
+                    if USE_PROXY and BINANCE_PROXY_URL:
+                        # Build full URL and proxy it
+                        base = self._endpoints[self._current_endpoint_idx]
+                        full_url = f"{base}{path}"
+                        proxied = _proxy_url(full_url)
+                        resp = await self._http.get(proxied, params=params)
+                    else:
+                        resp = await self._http.get(path, params=params)
 
-        # Skip symbols that are known to be geo-restricted
-        if symbol and symbol in _blocked_symbols:
-            raise GeoBlockedError(f"{symbol} is geo-restricted on this server")
+                    resp.raise_for_status()
+                    return resp.json()
+                except httpx.HTTPStatusError as e:
+                    last_error = e
+                    if e.response.status_code == 451:
+                        # Geo-blocked, try next endpoint
+                        logger.warning(f"Endpoint blocked (451), rotating...")
+                        break
+                    if e.response.status_code == 429:
+                        # Rate limited, wait and retry
+                        logger.warning(f"Rate limited, waiting...")
+                        await asyncio.sleep(2 * (attempt + 1))
+                        continue
+                    if attempt == retries - 1:
+                        break
+                    await asyncio.sleep(1)
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as e:
+                    last_error = e
+                    logger.warning(f"Connection error: {e}, attempt {attempt+1}/{retries}")
+                    if attempt == retries - 1:
+                        break
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                except Exception as e:
+                    last_error = e
+                    if attempt == retries - 1:
+                        break
+                    await asyncio.sleep(1)
 
-        for attempt in range(retries):
-            try:
-                resp = await self._http.get(path, params=params)
-                # Handle HTTP 451: Unavailable For Legal Reasons (geo-block)
-                if resp.status_code == 451:
-                    if symbol:
-                        _blocked_symbols.add(symbol)
-                    logger.warning(
-                        f"⚠️  HTTP 451 (geo-restricted) for {symbol or path}. "
-                        f"This symbol is blocked from this server's region. Skipping."
-                    )
-                    raise GeoBlockedError(
-                        f"{symbol or path} is geo-restricted (HTTP 451)"
-                    )
-                resp.raise_for_status()
-                return resp.json()
-            except GeoBlockedError:
-                raise  # Don't retry geo-blocks
-            except Exception as e:
-                if attempt == retries - 1:
-                    raise e
-                await asyncio.sleep(1)  # Wait before retry
+            # Try next endpoint
+            await self._rotate_endpoint()
+
+        raise last_error or Exception("All Binance endpoints failed")
 
     # ── Public endpoints ────────────────────────────────────
     async def get_klines(self, symbol: str, interval: str = "1m",
@@ -151,6 +205,7 @@ class BinanceClient:
         data = {}
         for tf, result in zip(timeframes, results):
             if isinstance(result, Exception):
+                logger.error(f"Failed to get {symbol} {tf}: {result}")
                 data[tf] = None
             else:
                 data[tf] = result

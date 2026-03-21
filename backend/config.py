@@ -6,13 +6,26 @@ import os
 # ─── Binance API ───
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
-# Use data-api.binance.vision to avoid ANY geo-blocking from US cloud providers
-# Use data-api.binance.vision to avoid ANY geo-blocking from US cloud providers
-BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://data-api.binance.vision")
+# api3 is often more stable and less likely to be blocked by cloud providers like Render
+BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api3.binance.com")
 BINANCE_ENDPOINTS = [
-    "https://data-api.binance.vision"
+    "https://api3.binance.com",
+    "https://api1.binance.com",
+    "https://api2.binance.com",
+    "https://api4.binance.com",
+    "https://api.binance.com",
+    # ── Binance US mirror (not geo-blocked) ──
+    "https://api.binance.us",
 ]
 BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
+
+# ─── Proxy / Cloud Deployment ───
+# Enable these on Render/Railway if Binance is blocked
+USE_BINANCE_PROXY = os.getenv("USE_BINANCE_PROXY", "false")
+BINANCE_PROXY_URL = os.getenv("BINANCE_PROXY_URL", "")
+# Use REST polling instead of WebSocket for platforms blocking outbound WS
+USE_REST_POLLING = os.getenv("USE_REST_POLLING", "false")
+REST_POLL_INTERVAL = float(os.getenv("REST_POLL_INTERVAL", "3"))
 
 # ─── Trading Pairs ───
 DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "PAXGUSDT"]

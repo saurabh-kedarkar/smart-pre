@@ -197,11 +197,18 @@ async def lifespan(app: FastAPI):
     global analysis_loop_task
     logger.info("🚀 SmartPre AI Agent starting...")
 
-    # Initialize data agent
-    await data_agent.initialize()
+    # Initialize data agent (graceful — don't crash if Binance is initially blocked)
+    try:
+        await data_agent.initialize()
+        logger.info("✅ Initial data loaded successfully")
+    except Exception as e:
+        logger.warning(f"⚠️  Initial data load failed: {e}. Will retry in analysis loop.")
     
-    # Start data streaming
-    await data_agent.start_streaming()
+    # Start data streaming (REST polling or WebSocket based on config)
+    try:
+        await data_agent.start_streaming()
+    except Exception as e:
+        logger.warning(f"⚠️  Streaming start failed: {e}. Will use REST fallback in analysis loop.")
 
     # Start analysis loop
     analysis_loop_task = asyncio.create_task(analysis_loop())
@@ -239,10 +246,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend static assets (css, js, static/assets)
-app.mount("/static/css", StaticFiles(directory="../frontend/css"), name="static-css")
-app.mount("/static/js", StaticFiles(directory="../frontend/js"), name="static-js")
-app.mount("/static/assets", StaticFiles(directory="../frontend/static/assets"), name="static-assets")
+# Serve frontend
+app.mount("/static", StaticFiles(directory="../frontend"), name="static")
 
 
 # ─── REST Endpoints ──────────────────────────────────
@@ -259,8 +264,8 @@ async def health():
 
 @app.get("/api/symbols")
 async def get_symbols():
-    """Get list of tracked symbols (excludes geo-blocked ones)."""
-    return {"symbols": data_agent.symbols}
+    """Get list of tracked symbols."""
+    return {"symbols": DEFAULT_SYMBOLS}
 
 
 @app.get("/api/prices")
@@ -327,17 +332,11 @@ async def get_market_summary(symbol: str):
     return data_agent.get_market_summary(symbol)
 
 
-@app.get("/api/decisions")
-async def get_all_decisions():
-    """Get all current decisions for every tracked symbol."""
-    return json_serializable(decision_agent.get_all_decisions())
-
-
 @app.get("/api/history/{symbol}")
 async def get_history(symbol: str, timeframe: str = Query("15m")):
     """Get historical candles for the chart."""
     symbol = symbol.upper()
-    return json_serializable(data_agent.get_history(symbol, timeframe))
+    return data_agent.get_history(symbol, timeframe)
 
 
 from agents.backtest_agent import BacktestAgent

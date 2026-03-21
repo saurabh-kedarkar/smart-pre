@@ -168,3 +168,14 @@ Past performance does not guarantee future results. Always do your own research.
 ---
 
 Built with ❤️ by SmartPre AI
+
+
+USE_REST_POLLING = true ← SABSE IMPORTANT
+REST_POLL_INTERVAL = 3
+BINANCE_BASE_URL = https://api3.binance.com
+PORT = 10000
+PYTHON_VERSION = 3.11.
+
+--------------------
+USE_BINANCE_PROXY = true
+BINANCE_PROXY_URL = https://corsproxy.io/?

@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 from typing import Optional
 
-from utils.binance_client import BinanceClient, GeoBlockedError
+from utils.binance_client import BinanceClient
 from utils.websocket_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,6 @@ class DataAgent:
     async def initialize(self) -> None:
         """Load initial historical data for all symbols."""
         logger.info("Initializing Data Agent...")
-        blocked = []
 
         for symbol in self.symbols:
             try:
@@ -52,18 +51,8 @@ class DataAgent:
                 self._last_update[symbol] = datetime.utcnow().isoformat()
 
                 logger.info(f"Loaded data for {symbol}")
-            except GeoBlockedError:
-                logger.warning(
-                    f"⚠️  {symbol} is geo-restricted from this server. "
-                    f"Removing from tracked symbols."
-                )
-                blocked.append(symbol)
             except Exception as e:
                 logger.error(f"Failed to load {symbol}: {e}")
-
-        # Remove geo-blocked symbols so they don't break the pipeline
-        for sym in blocked:
-            self.symbols.remove(sym)
 
     async def start_streaming(self) -> None:
         """Start WebSocket streams for all symbols."""
