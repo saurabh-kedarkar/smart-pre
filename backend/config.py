@@ -10,14 +10,9 @@ BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
 BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api3.binance.com")
 BINANCE_ENDPOINTS = [
     # ── Binance US mirror (not geo-blocked) ──
-    "https://api.binance.us",
-    "https://api3.binance.com",
-    "https://api1.binance.com",
-    "https://api2.binance.com",
-    "https://api4.binance.com",
-    "https://api.binance.com",
+    "https://api.binance.us"
 ]
-BINANCE_WS_URL = "wss://stream.binance.com:9443/ws"
+BINANCE_WS_URL = "wss://stream.binance.us:9443/ws"
 
 # ─── Proxy / Cloud Deployment ───
 # Enable these on Render/Railway if Binance is blocked
